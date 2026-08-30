@@ -3399,3 +3399,47 @@ footer p {
     width: 100%;
   }
 }
+/* ======================================
+   AUTH PRODUCTION LOADING STATE
+====================================== */
+
+.auth-loading-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  padding: 12px 14px;
+
+  border: 1px solid
+    rgba(139, 118, 255, 0.22);
+
+  border-radius: 10px;
+
+  background:
+    rgba(118, 87, 255, 0.07);
+
+  color: #bcb2f4;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-loading-message svg {
+  flex-shrink: 0;
+
+  margin-top: 1px;
+
+  color: #927cff;
+}
+
+.auth-loading-spinner {
+  animation:
+    auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}

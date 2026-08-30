@@ -4,6 +4,7 @@ import {
   Compass,
   Eye,
   EyeOff,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   User,
@@ -15,6 +16,76 @@ import "../App.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000";
+
+const REQUEST_TIMEOUT_MS =
+  60000;
+
+/* ======================================
+   FETCH WITH TIMEOUT
+====================================== */
+
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeout = REQUEST_TIMEOUT_MS
+) {
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    window.setTimeout(() => {
+      controller.abort();
+    }, timeout);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(
+      timeoutId
+    );
+  }
+}
+
+/* ======================================
+   FRIENDLY REQUEST ERROR
+====================================== */
+
+function getFriendlyRequestError(
+  error
+) {
+  if (
+    error?.name ===
+    "AbortError"
+  ) {
+    return (
+      "SkillPath is taking longer than expected to respond. " +
+      "Please try again in a moment."
+    );
+  }
+
+  if (
+    error instanceof TypeError ||
+    error?.message ===
+      "Failed to fetch"
+  ) {
+    return (
+      "Unable to connect to the SkillPath server. " +
+      "Check your internet connection and try again."
+    );
+  }
+
+  return (
+    error?.message ||
+    "Unable to create account."
+  );
+}
+
+/* ======================================
+   REGISTER PAGE
+====================================== */
 
 function Register() {
   const [name, setName] =
@@ -41,28 +112,35 @@ function Register() {
     setIsSubmitting,
   ] = useState(false);
 
+  const [
+    loadingMessage,
+    setLoadingMessage,
+  ] = useState("");
+
   const [error, setError] =
     useState("");
 
   const [success, setSuccess] =
     useState("");
 
-  // ======================================
-  // CLEAN VALUES
-  // ======================================
+  /* ======================================
+     CLEAN VALUES
+  ====================================== */
 
   const cleanName =
     name.trim();
 
   const cleanEmail =
-    email.trim().toLowerCase();
+    email
+      .trim()
+      .toLowerCase();
 
   const emailPattern =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // ======================================
-  // FORM VALIDATION
-  // ======================================
+  /* ======================================
+     FORM VALIDATION
+  ====================================== */
 
   const isNameValid =
     cleanName.length >= 2;
@@ -87,9 +165,9 @@ function Register() {
     passwordsMatch &&
     !isSubmitting;
 
-  // ======================================
-  // CLEAR MESSAGE WHEN EDITING
-  // ======================================
+  /* ======================================
+     CLEAR MESSAGE WHEN EDITING
+  ====================================== */
 
   const clearMessages = () => {
     if (error) {
@@ -101,135 +179,196 @@ function Register() {
     }
   };
 
-  // ======================================
-  // REGISTER
-  // ======================================
+  /* ======================================
+     REGISTER
+  ====================================== */
 
-  const handleSubmit = async (
-    event
-  ) => {
-    event.preventDefault();
+  const handleSubmit =
+    async (event) => {
+      event.preventDefault();
 
-    if (
-      !canSubmit ||
-      isSubmitting
-    ) {
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-
-    // ------------------------------
-    // NAME CHECK
-    // ------------------------------
-
-    if (!isNameValid) {
-      setError(
-        "Name must contain at least 2 characters."
-      );
-
-      return;
-    }
-
-    // ------------------------------
-    // EMAIL CHECK
-    // ------------------------------
-
-    if (!isEmailValid) {
-      setError(
-        "Please enter a valid email address."
-      );
-
-      return;
-    }
-
-    // ------------------------------
-    // PASSWORD CHECK
-    // ------------------------------
-
-    if (!isPasswordValid) {
-      setError(
-        "Password must contain at least 8 characters."
-      );
-
-      return;
-    }
-
-    // ------------------------------
-    // CONFIRM PASSWORD
-    // ------------------------------
-
-    if (
-      password !==
-      confirmPassword
-    ) {
-      setError(
-        "Passwords do not match."
-      );
-
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const response =
-        await fetch(
-          `${API_BASE_URL}/api/auth/register`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              name: cleanName,
-              email: cleanEmail,
-              password,
-            }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            "Unable to create account."
-        );
+      if (
+        !canSubmit ||
+        isSubmitting
+      ) {
+        return;
       }
 
-      setSuccess(
-        "Account created successfully. Redirecting to login..."
+      setError("");
+      setSuccess("");
+      setLoadingMessage("");
+
+      // ======================================
+      // NAME CHECK
+      // ======================================
+
+      if (!isNameValid) {
+        setError(
+          "Name must contain at least 2 characters."
+        );
+
+        return;
+      }
+
+      // ======================================
+      // EMAIL CHECK
+      // ======================================
+
+      if (!isEmailValid) {
+        setError(
+          "Please enter a valid email address."
+        );
+
+        return;
+      }
+
+      // ======================================
+      // PASSWORD CHECK
+      // ======================================
+
+      if (!isPasswordValid) {
+        setError(
+          "Password must contain at least 8 characters."
+        );
+
+        return;
+      }
+
+      // ======================================
+      // CONFIRM PASSWORD
+      // ======================================
+
+      if (
+        password !==
+        confirmPassword
+      ) {
+        setError(
+          "Passwords do not match."
+        );
+
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      setLoadingMessage(
+        "Connecting securely to SkillPath..."
       );
 
-      setName("");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
+      // ======================================
+      // RENDER COLD START MESSAGE
+      // ======================================
 
-      window.setTimeout(() => {
-        window.location.href =
-          "/login";
-      }, 1200);
-    } catch (requestError) {
-      console.error(
-        "Registration failed:",
-        requestError
-      );
+      const slowServerTimer =
+        window.setTimeout(() => {
+          setLoadingMessage(
+            "SkillPath is starting the server. The first request may take a few extra seconds."
+          );
+        }, 4000);
 
-      setError(
-        requestError.message ||
-          "Unable to create account."
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      try {
+        // ======================================
+        // REGISTER REQUEST
+        // ======================================
+
+        const response =
+          await fetchWithTimeout(
+            `${API_BASE_URL}/api/auth/register`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  name:
+                    cleanName,
+
+                  email:
+                    cleanEmail,
+
+                  password,
+                }),
+            }
+          );
+
+        window.clearTimeout(
+          slowServerTimer
+        );
+
+        let data = null;
+
+        try {
+          data =
+            await response.json();
+        } catch {
+          throw new Error(
+            "The server returned an invalid response."
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              "Unable to create account."
+          );
+        }
+
+        // ======================================
+        // SUCCESS
+        // ======================================
+
+        setLoadingMessage(
+          "Preparing your SkillPath account..."
+        );
+
+        setSuccess(
+          "Account created successfully."
+        );
+
+        setName("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+
+        // ======================================
+        // REDIRECT
+        // ======================================
+
+        window.setTimeout(() => {
+          setLoadingMessage(
+            "Redirecting you to login..."
+          );
+        }, 400);
+
+        window.setTimeout(() => {
+          window.location.href =
+            "/login";
+        }, 1200);
+      } catch (requestError) {
+        window.clearTimeout(
+          slowServerTimer
+        );
+
+        console.error(
+          "Registration failed:",
+          requestError
+        );
+
+        setError(
+          getFriendlyRequestError(
+            requestError
+          )
+        );
+
+        setLoadingMessage("");
+
+        setIsSubmitting(false);
+      }
+    };
 
   return (
     <div className="auth-page">
@@ -245,13 +384,18 @@ function Register() {
         <button
           type="button"
           className="auth-back-button"
-          disabled={isSubmitting}
+          disabled={
+            isSubmitting
+          }
           onClick={() => {
             window.location.href =
               "/";
           }}
         >
-          <ArrowLeft size={17} />
+          <ArrowLeft
+            size={17}
+          />
+
           Home
         </button>
 
@@ -262,7 +406,9 @@ function Register() {
         <div className="auth-brand">
 
           <div className="logo-icon">
-            <Compass size={21} />
+            <Compass
+              size={21}
+            />
           </div>
 
           <span>
@@ -303,7 +449,9 @@ function Register() {
 
           <form
             className="auth-form"
-            onSubmit={handleSubmit}
+            onSubmit={
+              handleSubmit
+            }
             noValidate
           >
 
@@ -313,13 +461,17 @@ function Register() {
 
             <div className="auth-field">
 
-              <label htmlFor="name">
+              <label
+                htmlFor="name"
+              >
                 Full Name
               </label>
 
               <div className="auth-input-wrapper">
 
-                <User size={18} />
+                <User
+                  size={18}
+                />
 
                 <input
                   id="name"
@@ -331,9 +483,12 @@ function Register() {
                   }
                   placeholder="Enter your name"
                   autoComplete="name"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setName(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     clearMessages();
@@ -350,13 +505,17 @@ function Register() {
 
             <div className="auth-field">
 
-              <label htmlFor="email">
+              <label
+                htmlFor="email"
+              >
                 Email Address
               </label>
 
               <div className="auth-input-wrapper">
 
-                <Mail size={18} />
+                <Mail
+                  size={18}
+                />
 
                 <input
                   id="email"
@@ -368,9 +527,12 @@ function Register() {
                   }
                   placeholder="you@example.com"
                   autoComplete="email"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setEmail(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     clearMessages();
@@ -387,7 +549,9 @@ function Register() {
 
             <div className="auth-field">
 
-              <label htmlFor="password">
+              <label
+                htmlFor="password"
+              >
                 Password
               </label>
 
@@ -404,16 +568,21 @@ function Register() {
                       ? "text"
                       : "password"
                   }
-                  value={password}
+                  value={
+                    password
+                  }
                   required
                   disabled={
                     isSubmitting
                   }
                   placeholder="Minimum 8 characters"
                   autoComplete="new-password"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setPassword(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     clearMessages();
@@ -431,17 +600,21 @@ function Register() {
                       ? "Hide password"
                       : "Show password"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setShowPassword(
                       (current) =>
                         !current
-                    )
-                  }
+                    );
+                  }}
                 >
                   {showPassword ? (
-                    <EyeOff size={18} />
+                    <EyeOff
+                      size={18}
+                    />
                   ) : (
-                    <Eye size={18} />
+                    <Eye
+                      size={18}
+                    />
                   )}
                 </button>
 
@@ -455,7 +628,9 @@ function Register() {
 
             <div className="auth-field">
 
-              <label htmlFor="confirmPassword">
+              <label
+                htmlFor="confirmPassword"
+              >
                 Confirm Password
               </label>
 
@@ -481,9 +656,12 @@ function Register() {
                   }
                   placeholder="Enter password again"
                   autoComplete="new-password"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setConfirmPassword(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     clearMessages();
@@ -493,6 +671,26 @@ function Register() {
               </div>
 
             </div>
+
+            {/* ======================================
+                LOADING STATUS
+            ====================================== */}
+
+            {isSubmitting &&
+              loadingMessage && (
+                <div className="auth-loading-message">
+
+                  <LoaderCircle
+                    size={18}
+                    className="auth-loading-spinner"
+                  />
+
+                  <span>
+                    {loadingMessage}
+                  </span>
+
+                </div>
+              )}
 
             {/* ======================================
                 ERROR
@@ -521,16 +719,27 @@ function Register() {
             <button
               type="submit"
               className="auth-submit-button"
-              disabled={!canSubmit}
+              disabled={
+                !canSubmit
+              }
             >
-              {isSubmitting
-                ? "Creating Account..."
-                : "Create Account"}
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle
+                    size={18}
+                    className="auth-loading-spinner"
+                  />
 
-              {!isSubmitting && (
-                <ArrowRight
-                  size={18}
-                />
+                  Please wait...
+                </>
+              ) : (
+                <>
+                  Create Account
+
+                  <ArrowRight
+                    size={18}
+                  />
+                </>
               )}
             </button>
 
@@ -548,7 +757,9 @@ function Register() {
 
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting
+              }
               onClick={() => {
                 window.location.href =
                   "/login";

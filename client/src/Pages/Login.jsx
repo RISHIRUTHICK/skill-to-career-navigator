@@ -4,6 +4,7 @@ import {
   Compass,
   Eye,
   EyeOff,
+  LoaderCircle,
   LockKeyhole,
   Mail,
 } from "lucide-react";
@@ -27,6 +28,81 @@ import {
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000";
+
+const REQUEST_TIMEOUT_MS =
+  60000;
+
+/* ======================================
+   FETCH WITH TIMEOUT
+====================================== */
+
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeout =
+    REQUEST_TIMEOUT_MS
+) {
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    window.setTimeout(
+      () => {
+        controller.abort();
+      },
+      timeout
+    );
+
+  try {
+    return await fetch(
+      url,
+      {
+        ...options,
+
+        signal:
+          controller.signal,
+      }
+    );
+  } finally {
+    window.clearTimeout(
+      timeoutId
+    );
+  }
+}
+
+/* ======================================
+   FRIENDLY REQUEST ERROR
+====================================== */
+
+function getFriendlyRequestError(
+  error
+) {
+  if (
+    error?.name ===
+    "AbortError"
+  ) {
+    return (
+      "SkillPath is taking longer than expected to respond. " +
+      "Please try again in a moment."
+    );
+  }
+
+  if (
+    error instanceof TypeError ||
+    error?.message ===
+      "Failed to fetch"
+  ) {
+    return (
+      "Unable to connect to the SkillPath server. " +
+      "Check your internet connection and try again."
+    );
+  }
+
+  return (
+    error?.message ||
+    "Unable to login."
+  );
+}
 
 /* ======================================
    CLEAR USER-SPECIFIC LOCAL DATA
@@ -67,17 +143,18 @@ async function loadUserAssessment(
       "skillPathAssessmentId"
     );
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/assessments/latest`,
-    {
-      method: "GET",
+  const response =
+    await fetchWithTimeout(
+      `${API_BASE_URL}/api/assessments/latest`,
+      {
+        method: "GET",
 
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-      },
-    }
-  );
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+      }
+    );
 
   let data = null;
 
@@ -94,7 +171,9 @@ async function loadUserAssessment(
   // USER HAS NO ASSESSMENT
   // ======================================
 
-  if (response.status === 404) {
+  if (
+    response.status === 404
+  ) {
     clearCareerData();
 
     localStorage.setItem(
@@ -109,7 +188,9 @@ async function loadUserAssessment(
   // INVALID / EXPIRED TOKEN
   // ======================================
 
-  if (response.status === 401) {
+  if (
+    response.status === 401
+  ) {
     clearAuthSession();
 
     throw new Error(
@@ -145,13 +226,6 @@ async function loadUserAssessment(
     String(
       assessment._id || ""
     );
-
-  /*
-    If the assessment saved in this
-    browser is different from the one
-    belonging to this account, do not
-    reuse old roadmap progress.
-  */
 
   if (
     previousAssessmentId &&
@@ -241,11 +315,15 @@ async function loadUserAssessment(
 ====================================== */
 
 function Login() {
-  const [email, setEmail] =
-    useState("");
+  const [
+    email,
+    setEmail,
+  ] = useState("");
 
-  const [password, setPassword] =
-    useState("");
+  const [
+    password,
+    setPassword,
+  ] = useState("");
 
   const [
     showPassword,
@@ -257,15 +335,24 @@ function Login() {
     setIsSubmitting,
   ] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [
+    loadingMessage,
+    setLoadingMessage,
+  ] = useState("");
+
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   // ======================================
   // VALIDATION
   // ======================================
 
   const cleanEmail =
-    email.trim().toLowerCase();
+    email
+      .trim()
+      .toLowerCase();
 
   const canSubmit =
     cleanEmail.length > 0 &&
@@ -276,249 +363,292 @@ function Login() {
   // LOGIN
   // ======================================
 
-  const handleSubmit = async (
-    event
-  ) => {
-    event.preventDefault();
+  const handleSubmit =
+    async (event) => {
+      event.preventDefault();
 
-    if (
-      isSubmitting ||
-      !canSubmit
-    ) {
-      return;
-    }
+      if (
+        isSubmitting ||
+        !canSubmit
+      ) {
+        return;
+      }
 
-    setError("");
+      setError("");
+      setLoadingMessage("");
 
-    // ======================================
-    // EMAIL
-    // ======================================
-
-    if (!cleanEmail) {
-      setError(
-        "Please enter your email address."
-      );
-
-      return;
-    }
-
-    // ======================================
-    // PASSWORD
-    // ======================================
-
-    if (!password) {
-      setError(
-        "Please enter your password."
-      );
-
-      return;
-    }
-
-    // ======================================
-    // EMAIL FORMAT
-    // ======================================
-
-    const emailPattern =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (
-      !emailPattern.test(
-        cleanEmail
-      )
-    ) {
-      setError(
-        "Please enter a valid email address."
-      );
-
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
       // ======================================
-      // LOGIN REQUEST
+      // EMAIL
       // ======================================
 
-      const response =
-        await fetch(
-          `${API_BASE_URL}/api/auth/login`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              email: cleanEmail,
-              password,
-            }),
-          }
+      if (!cleanEmail) {
+        setError(
+          "Please enter your email address."
         );
 
-      let data = null;
+        return;
+      }
+
+      // ======================================
+      // PASSWORD
+      // ======================================
+
+      if (!password) {
+        setError(
+          "Please enter your password."
+        );
+
+        return;
+      }
+
+      // ======================================
+      // EMAIL FORMAT
+      // ======================================
+
+      const emailPattern =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (
+        !emailPattern.test(
+          cleanEmail
+        )
+      ) {
+        setError(
+          "Please enter a valid email address."
+        );
+
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      setLoadingMessage(
+        "Connecting securely to SkillPath..."
+      );
+
+      // ======================================
+      // RENDER COLD START MESSAGE
+      // ======================================
+
+      const slowServerTimer =
+        window.setTimeout(
+          () => {
+            setLoadingMessage(
+              "SkillPath is starting the server. The first request may take a few extra seconds."
+            );
+          },
+          4000
+        );
 
       try {
-        data =
-          await response.json();
-      } catch {
-        throw new Error(
-          "The server returned an invalid response."
-        );
-      }
+        // ======================================
+        // LOGIN REQUEST
+        // ======================================
 
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            "Unable to login."
-        );
-      }
+        const response =
+          await fetchWithTimeout(
+            `${API_BASE_URL}/api/auth/login`,
+            {
+              method: "POST",
 
-      if (
-        !data?.token ||
-        !data?.user?.id
-      ) {
-        throw new Error(
-          "Invalid login response."
-        );
-      }
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
 
-      const currentUserId =
-        String(
-          data.user.id
-        );
+              body:
+                JSON.stringify({
+                  email:
+                    cleanEmail,
 
-      // ======================================
-      // CHECK PREVIOUS LOCAL USER
-      // ======================================
+                  password,
+                }),
+            }
+          );
 
-      const previousLocalUserId =
-        localStorage.getItem(
-          "skillPathLocalUserId"
+        window.clearTimeout(
+          slowServerTimer
         );
 
-      /*
-        Another account previously used
-        this browser.
+        let data = null;
 
-        Remove that account's cached
-        assessment and roadmap before
-        loading the new account.
-      */
+        try {
+          data =
+            await response.json();
+        } catch {
+          throw new Error(
+            "The server returned an invalid response."
+          );
+        }
 
-      if (
-        previousLocalUserId &&
-        previousLocalUserId !==
-          currentUserId
-      ) {
-        clearCareerData();
-      }
-
-      // ======================================
-      // SAVE AUTH SESSION
-      // ======================================
-
-      localStorage.setItem(
-        "skillPathAuthToken",
-        data.token
-      );
-
-      localStorage.setItem(
-        "skillPathUser",
-        JSON.stringify(
-          data.user
-        )
-      );
-
-      console.log(
-        "Login successful."
-      );
-
-      // ======================================
-      // SYNC PENDING ASSESSMENT
-      // ======================================
-
-      const hasPendingAssessment =
-        localStorage.getItem(
-          "skillPathSyncPending"
-        ) === "true";
-
-      if (
-        hasPendingAssessment
-      ) {
-        const syncResult =
-          await syncPendingAssessment();
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              "Unable to login."
+          );
+        }
 
         if (
-          syncResult?.reason ===
+          !data?.token ||
+          !data?.user?.id
+        ) {
+          throw new Error(
+            "Invalid login response."
+          );
+        }
+
+        const currentUserId =
+          String(
+            data.user.id
+          );
+
+        setLoadingMessage(
+          "Login successful. Restoring your SkillPath data..."
+        );
+
+        // ======================================
+        // CHECK PREVIOUS LOCAL USER
+        // ======================================
+
+        const previousLocalUserId =
+          localStorage.getItem(
+            "skillPathLocalUserId"
+          );
+
+        if (
+          previousLocalUserId &&
+          previousLocalUserId !==
+            currentUserId
+        ) {
+          clearCareerData();
+        }
+
+        // ======================================
+        // SAVE AUTH SESSION
+        // ======================================
+
+        localStorage.setItem(
+          "skillPathAuthToken",
+          data.token
+        );
+
+        localStorage.setItem(
+          "skillPathUser",
+          JSON.stringify(
+            data.user
+          )
+        );
+
+        console.log(
+          "Login successful."
+        );
+
+        // ======================================
+        // SYNC PENDING ASSESSMENT
+        // ======================================
+
+        const hasPendingAssessment =
+          localStorage.getItem(
+            "skillPathSyncPending"
+          ) === "true";
+
+        if (
+          hasPendingAssessment
+        ) {
+          setLoadingMessage(
+            "Syncing your latest assessment..."
+          );
+
+          const syncResult =
+            await syncPendingAssessment();
+
+          if (
+            syncResult?.reason ===
+            "authentication-expired"
+          ) {
+            throw new Error(
+              "Your login session could not be verified. Please log in again."
+            );
+          }
+        }
+
+        // ======================================
+        // LOAD THIS USER'S ASSESSMENT
+        // ======================================
+
+        setLoadingMessage(
+          "Loading your career assessment..."
+        );
+
+        await loadUserAssessment(
+          data.token,
+          currentUserId
+        );
+
+        // ======================================
+        // LOAD THIS USER'S ROADMAP
+        // ======================================
+
+        setLoadingMessage(
+          "Restoring your roadmap progress..."
+        );
+
+        const roadmapResult =
+          await loadUserRoadmapProgress();
+
+        if (
+          roadmapResult?.reason ===
           "authentication-expired"
         ) {
           throw new Error(
-            "Your login session could not be verified. Please log in again."
+            "Your login session has expired. Please log in again."
           );
         }
-      }
 
-      // ======================================
-      // LOAD THIS USER'S ASSESSMENT
-      // ======================================
-
-      await loadUserAssessment(
-        data.token,
-        currentUserId
-      );
-
-      // ======================================
-      // LOAD THIS USER'S ROADMAP
-      // ======================================
-
-      const roadmapResult =
-        await loadUserRoadmapProgress();
-
-      if (
-        roadmapResult?.reason ===
-        "authentication-expired"
-      ) {
-        throw new Error(
-          "Your login session has expired. Please log in again."
+        console.log(
+          "User roadmap progress restored."
         );
+
+        // ======================================
+        // REMEMBER LOCAL DATA OWNER
+        // ======================================
+
+        localStorage.setItem(
+          "skillPathLocalUserId",
+          currentUserId
+        );
+
+        // ======================================
+        // DASHBOARD
+        // ======================================
+
+        setLoadingMessage(
+          "Opening your dashboard..."
+        );
+
+        window.location.href =
+          "/dashboard";
+      } catch (requestError) {
+        window.clearTimeout(
+          slowServerTimer
+        );
+
+        console.error(
+          "Login failed:",
+          requestError
+        );
+
+        setError(
+          getFriendlyRequestError(
+            requestError
+          )
+        );
+
+        setLoadingMessage("");
+
+        setIsSubmitting(false);
       }
-
-      console.log(
-        "User roadmap progress restored."
-      );
-
-      // ======================================
-      // REMEMBER LOCAL DATA OWNER
-      // ======================================
-
-      localStorage.setItem(
-        "skillPathLocalUserId",
-        currentUserId
-      );
-
-      // ======================================
-      // GO TO DASHBOARD
-      // ======================================
-
-      window.location.href =
-        "/dashboard";
-    } catch (requestError) {
-      console.error(
-        "Login failed:",
-        requestError
-      );
-
-      setError(
-        requestError.message ||
-          "Unable to login."
-      );
-
-      setIsSubmitting(false);
-    }
-  };
+    };
 
   return (
     <div className="auth-page">
@@ -635,9 +765,12 @@ function Login() {
                   }
                   placeholder="you@example.com"
                   autoComplete="email"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setEmail(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     if (error) {
@@ -675,16 +808,21 @@ function Login() {
                       ? "text"
                       : "password"
                   }
-                  value={password}
+                  value={
+                    password
+                  }
                   required
                   disabled={
                     isSubmitting
                   }
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     setPassword(
-                      event.target.value
+                      event.target
+                        .value
                     );
 
                     if (error) {
@@ -704,12 +842,12 @@ function Login() {
                       ? "Hide password"
                       : "Show password"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setShowPassword(
                       (current) =>
                         !current
-                    )
-                  }
+                    );
+                  }}
                 >
                   {showPassword ? (
                     <EyeOff
@@ -725,6 +863,26 @@ function Login() {
               </div>
 
             </div>
+
+            {/* ======================================
+                LOADING STATUS
+            ====================================== */}
+
+            {isSubmitting &&
+              loadingMessage && (
+                <div className="auth-loading-message">
+
+                  <LoaderCircle
+                    size={18}
+                    className="auth-loading-spinner"
+                  />
+
+                  <span>
+                    {loadingMessage}
+                  </span>
+
+                </div>
+              )}
 
             {/* ======================================
                 ERROR
@@ -747,14 +905,23 @@ function Login() {
                 !canSubmit
               }
             >
-              {isSubmitting
-                ? "Loading Your Account..."
-                : "Log In"}
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle
+                    size={18}
+                    className="auth-loading-spinner"
+                  />
 
-              {!isSubmitting && (
-                <ArrowRight
-                  size={18}
-                />
+                  Please wait...
+                </>
+              ) : (
+                <>
+                  Log In
+
+                  <ArrowRight
+                    size={18}
+                  />
+                </>
               )}
             </button>
 
