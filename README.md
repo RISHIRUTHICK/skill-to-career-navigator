@@ -1,5 +1,5 @@
 # SkillPath – Skill-to-Career Navigator
-
+[![SkillPath CI](https://github.com/RISHIRUTHICK/skill-to-career-navigator/actions/workflows/ci.yml/badge.svg)](https://github.com/RISHIRUTHICK/skill-to-career-navigator/actions/workflows/ci.yml)
 SkillPath is a full-stack career guidance web application that analyzes a user's education, technical skills, experience, problem-solving ability, career interests, and goals to recommend a suitable technology career path.
 
 The application also provides a personalized learning roadmap, career-readiness score, progress tracking, secure authentication, and account management.
