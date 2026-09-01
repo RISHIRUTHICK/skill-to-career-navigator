@@ -156,7 +156,7 @@ async function loadUserAssessment(
       }
     );
 
-  let data = null;
+  let data
 
   try {
     data =

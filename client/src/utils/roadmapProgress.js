@@ -87,7 +87,7 @@ async function uploadRoadmapProgress(
     }
   );
 
-  let data = null;
+  let data
 
   try {
     data =

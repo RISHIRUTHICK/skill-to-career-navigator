@@ -71,8 +71,8 @@ const assessmentSchema =
       timestamps: true,
     }
   );
-
 const Assessment =
+  mongoose.models.Assessment ||
   mongoose.model(
     "Assessment",
     assessmentSchema

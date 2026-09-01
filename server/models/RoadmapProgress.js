@@ -31,6 +31,7 @@ const roadmapProgressSchema =
   );
 
 const RoadmapProgress =
+  mongoose.models.RoadmapProgress ||
   mongoose.model(
     "RoadmapProgress",
     roadmapProgressSchema
