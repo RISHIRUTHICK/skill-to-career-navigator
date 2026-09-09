@@ -70,6 +70,7 @@ const apiLimiter =
 
     message: {
       success: false,
+
       message:
         "Too many requests. Please try again later.",
     },
@@ -96,10 +97,99 @@ const authLimiter =
 
     message: {
       success: false,
+
       message:
         "Too many authentication attempts. Please try again later.",
     },
   });
+
+// ======================================
+// SAFE EMAIL VALIDATION
+// ======================================
+//
+// This intentionally avoids the previous
+// polynomial regular expression that CodeQL
+// flagged as a potential ReDoS vulnerability.
+//
+
+function isValidEmail(value) {
+  if (
+    typeof value !== "string" ||
+    value.length < 5 ||
+    value.length > 254
+  ) {
+    return false;
+  }
+
+  // Reject whitespace without using a
+  // potentially expensive regular expression.
+  for (const character of value) {
+    if (
+      character.trim() === ""
+    ) {
+      return false;
+    }
+  }
+
+  const firstAt =
+    value.indexOf("@");
+
+  const lastAt =
+    value.lastIndexOf("@");
+
+  // Exactly one @ is required.
+  if (
+    firstAt <= 0 ||
+    firstAt !== lastAt
+  ) {
+    return false;
+  }
+
+  const localPart =
+    value.slice(
+      0,
+      firstAt
+    );
+
+  const domainPart =
+    value.slice(
+      firstAt + 1
+    );
+
+  // Standard email length limits.
+  if (
+    localPart.length === 0 ||
+    localPart.length > 64 ||
+    domainPart.length < 3 ||
+    domainPart.length > 253
+  ) {
+    return false;
+  }
+
+  const lastDot =
+    domainPart.lastIndexOf(".");
+
+  // Domain must contain a dot with
+  // characters before and after it.
+  if (
+    lastDot <= 0 ||
+    lastDot ===
+      domainPart.length - 1
+  ) {
+    return false;
+  }
+
+  // Prevent obviously malformed domains.
+  if (
+    domainPart.startsWith(".") ||
+    domainPart.endsWith(".") ||
+    domainPart.includes("..")
+  ) {
+    return false;
+  }
+
+  return true;
+}
 
 // ======================================
 // HEALTH CHECK
@@ -108,19 +198,22 @@ const authLimiter =
 
 app.get(
   "/api/health",
+
   (req, res) => {
-    res.status(200).json({
-      success: true,
+    res
+      .status(200)
+      .json({
+        success: true,
 
-      message:
-        "SkillPath API is running",
+        message:
+          "SkillPath API is running",
 
-      database:
-        mongoose.connection
-          .readyState === 1
-          ? "connected"
-          : "disconnected",
-    });
+        database:
+          mongoose.connection
+            .readyState === 1
+            ? "connected"
+            : "disconnected",
+      });
   }
 );
 
@@ -169,6 +262,12 @@ app.post(
       } = req.body;
 
       if (
+        typeof name !==
+          "string" ||
+        typeof email !==
+          "string" ||
+        typeof password !==
+          "string" ||
         !name ||
         !email ||
         !password
@@ -204,11 +303,25 @@ app.post(
           });
       }
 
-      const emailPattern =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (
+        cleanName.length > 60
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            message:
+              "Name cannot contain more than 60 characters.",
+          });
+      }
+
+      // Safe deterministic email validation.
+      // Replaces:
+      // /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
       if (
-        !emailPattern.test(
+        !isValidEmail(
           cleanEmail
         )
       ) {
@@ -269,7 +382,7 @@ app.post(
           passwordHash,
         });
 
-      res
+      return res
         .status(201)
         .json({
           success: true,
@@ -327,7 +440,7 @@ app.post(
           });
       }
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -357,6 +470,10 @@ app.post(
       } = req.body;
 
       if (
+        typeof email !==
+          "string" ||
+        typeof password !==
+          "string" ||
         !email ||
         !password
       ) {
@@ -418,7 +535,7 @@ app.post(
           user._id.toString()
         );
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -445,7 +562,7 @@ app.post(
         error.message
       );
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -486,7 +603,7 @@ app.get(
           });
       }
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -514,7 +631,7 @@ app.get(
         error.message
       );
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -598,7 +715,8 @@ app.put(
           },
 
           {
-            new: true,
+            returnDocument:
+              "after",
 
             runValidators:
               true,
@@ -616,7 +734,7 @@ app.put(
           });
       }
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -661,7 +779,7 @@ app.put(
           });
       }
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -789,7 +907,7 @@ app.put(
 
       await user.save();
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -817,7 +935,7 @@ app.put(
           });
       }
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -915,7 +1033,7 @@ app.delete(
           req.userId,
       });
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -929,7 +1047,7 @@ app.delete(
         error.message
       );
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -998,7 +1116,7 @@ app.post(
               : 0,
         });
 
-      res
+      return res
         .status(201)
         .json({
           success: true,
@@ -1032,7 +1150,7 @@ app.post(
           });
       }
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -1079,7 +1197,7 @@ app.get(
           });
       }
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -1095,7 +1213,7 @@ app.get(
         error.message
       );
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -1142,7 +1260,7 @@ app.get(
           });
       }
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -1165,7 +1283,7 @@ app.get(
         error.message
       );
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -1244,9 +1362,11 @@ app.put(
             },
 
             {
-              new: true,
+              returnDocument:
+                "after",
 
-              upsert: true,
+              upsert:
+                true,
 
               runValidators:
                 true,
@@ -1254,7 +1374,7 @@ app.put(
           )
           .lean();
 
-      res
+      return res
         .status(200)
         .json({
           success: true,
@@ -1286,7 +1406,7 @@ app.put(
           });
       }
 
-      res
+      return res
         .status(500)
         .json({
           success: false,
@@ -1304,8 +1424,9 @@ app.put(
 
 app.use(
   "/api",
+
   (req, res) => {
-    res
+    return res
       .status(404)
       .json({
         success: false,
